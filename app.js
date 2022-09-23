@@ -7,6 +7,7 @@ const pdfParse = require('pdf-parse');
 const stringUtil = require('./util/string_util.js');
 const clientHelper = require('./data/network/supabase_client.js');
 
+var noticeDate = '';
 
 async function main() {
     let res = await axios({
@@ -20,31 +21,34 @@ async function main() {
     let result = await pdfParse(buffer);
 
     let list = updateCategoryList(result.text);
-    
+
+    // delete some old records in case DB is not enough room
     await clientHelper.deletePreviousRecords();
+    // delete same notice date records, in case duplicated records
+    await clientHelper.deleteRecordsByDate(noticeDate);
+    // add the parsed records
     await clientHelper.addListToDB(list);
-    
 }
 
 /**
  * update category list
  */
 function updateCategoryList(text) {
-    var texts = text.split('\n');
-
-    var categoryList = [];
-
-    var length = texts.length;
     const placeRegex = RegExp('^\\d+[.]\\s');
     const dateRegex = RegExp('^\\d{4}-\\d{2}-\\d{2}');
-    var index = 0;
 
+    var texts = text.split('\n');
+    var categoryList = [];
+    var length = texts.length;
+    var index = 0;
     var periodVisited = '';
     var testDate = '';
     var isParsingDate = false;
 
     while (!texts[index].startsWith('附註') && index < length) {
-        if (placeRegex.test(texts[index])) {
+        if (stringUtil.isBlank(noticeDate) && dateRegex.test(texts[index])) {
+            noticeDate = texts[index].replace(' ', '');
+        } else if (placeRegex.test(texts[index])) {
             // place
             var place = '';
             while (stringUtil.isNotBlank(texts[index])) {
@@ -97,14 +101,11 @@ function updateCategoryList(text) {
             }
             isParsingDate = false;
 
-            const dateFormatter = Intl.DateTimeFormat('sv-SE');
-            var date = dateFormatter.format(Date.now());
-
             categoryList.push({
                 place: place,
                 visit_time: periodVisited,
                 test_time: testDate,
-                notice_date: date,
+                notice_date: noticeDate,
             });
         } else {
             index++;
