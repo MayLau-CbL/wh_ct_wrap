@@ -115,4 +115,4 @@ function updateCategoryList(text) {
     return categoryList;
 }
 
-main();
+main().then(() => console.log('Finished'));
